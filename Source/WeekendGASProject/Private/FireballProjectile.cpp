@@ -5,6 +5,8 @@
 #include "GameFramework/ProjectileMovementComponent.h"
 #include "Components/SphereComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "AbilitySystemBlueprintLibrary.h"
+#include "AbilitySystemComponent.h"
 
 AFireballProjectile::AFireballProjectile()
 {
@@ -32,6 +34,42 @@ AFireballProjectile::AFireballProjectile()
 void AFireballProjectile::BeginPlay()
 {
 	Super::BeginPlay();
-	
+
+    if (CollisionComp)
+    {
+        CollisionComp->OnComponentBeginOverlap.AddDynamic(this, &AFireballProjectile::OnOverlap);
+    }
+}
+
+void AFireballProjectile::OnOverlap(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComp, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& SweepResult)
+{
+    // 나를 쏜 사람이면 무시
+    if (OtherActor == GetInstigator()) return;
+
+    UAbilitySystemComponent* TargetASC = UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(OtherActor);
+
+    if (TargetASC)
+    {
+        if (DamageEffectSpecHandle.IsValid())
+        {
+            TargetASC->ApplyGameplayEffectSpecToSelf(*DamageEffectSpecHandle.Data.Get());
+        }
+
+        if (BurnEffectClass)
+        {
+            FGameplayEffectContextHandle ContextHandle = TargetASC->MakeEffectContext();
+            ContextHandle.AddSourceObject(this);
+            ContextHandle.AddInstigator(GetInstigator(), this);
+
+            FGameplayEffectSpecHandle BurnSpecHandle = TargetASC->MakeOutgoingSpec(BurnEffectClass, 1.0f, ContextHandle);
+
+            if (BurnSpecHandle.IsValid())
+            {
+                TargetASC->ApplyGameplayEffectSpecToSelf(*BurnSpecHandle.Data.Get());
+            }
+        }
+    }
+
+    Destroy();
 }
 
